@@ -1,8 +1,14 @@
 defmodule Matrix do
   use Agent
 
-  def create(rows, cols) do
+  def new(rows, cols) do
     {:ok, matrix} = Matrix.start_link rows, cols
+    matrix
+  end
+
+
+  def from_list(list) do
+    {:ok, matrix} = Agent.start fn -> list end
     matrix
   end
 
@@ -57,10 +63,10 @@ defmodule Matrix do
   end
 
 
-  # def print(matrix) when is_pid(matrix) do
-  #   Matrix.get(matrix)
-  #   |> Matrix.print
-  # end
+  def print(matrix) when is_pid(matrix) do
+    Matrix.get(matrix)
+    |> Matrix.print
+  end
 
   def print(matrix) when is_list(matrix) do
     IO.inspect(matrix, charlists: :as_lists)
@@ -83,6 +89,7 @@ defmodule Matrix do
 
     new_val = Matrix.merge_with(m1, m2, foo)
     Matrix.update mat1, new_val
+    new_val
   end
 
   def merge_with(mat1, mat2, foo) when is_list(mat1) and is_list(mat2) do
@@ -107,12 +114,6 @@ defmodule Matrix do
 
   def add(m1, m2) when is_pid(m1) and is_pid(m2) do
     Matrix.merge_with(m1, m2, fn(x,y) -> x + y end)
-    # mat1 = Matrix.get(m1)
-    # mat2 = Matrix.get(m2)
-
-    # new_val = Matrix.add(mat1, mat2)
-    # Matrix.update m1, new_val
-    # new_val
   end
 
   def add(mat1, mat2) when is_list(mat2), do: Matrix.merge_with(mat1, mat2, fn(x,y) -> x + y end)
@@ -141,13 +142,49 @@ defmodule Matrix do
   end
 
 
-  def multiply(matrix, x) when is_number x do
-    new_val = Matrix.map matrix, fn(c) -> c * x end
-    Matrix.update(matrix, new_val)
-    new_val
+  def multiply(matrix, x) do
+    cond do
+      is_pid(matrix) -> Matrix.multiply(Matrix.get(matrix), x)
+
+
+      is_number(x) ->
+        Matrix.map matrix, fn(c) -> c * x end
+
+      is_pid(x) ->
+        Matrix.multiply(matrix, Matrix.get(x))
+
+      is_list(x) ->
+        Matrix.product matrix, x
+    end
+  end
+
+
+  def product(m1, m2) do
+    cond do
+      is_pid(m1) and is_pid(m2) -> Matrix.product(Matrix.get(m1), Matrix.get(m2))
+      is_pid(m1) -> Matrix.product(Matrix.get(m1), m2)
+      is_pid(m2) -> Matrix.product(m1, Matrix.get(m2))
+
+      # Credit: https://rosettacode.org/wiki/Matrix_multiplication#Elixir
+      is_list(m1) and is_list(m2) ->
+        Enum.map m1, fn (x) ->
+          Enum.map Matrix.transpose(m2), fn (y) ->
+            Enum.zip(x, y)
+            |> Enum.map(fn {x, y} -> x * y end)
+            |> Enum.sum
+        end
+      end
+
+    end
+  end
+
+
+  def transpose(mat) do
+    List.zip(mat) |> Enum.map(&Tuple.to_list(&1))
   end
 
 
   def rand(matrix), do: Matrix.update matrix, Matrix.map(matrix, fn(_) -> :rand.uniform() end)
+
 
 end
